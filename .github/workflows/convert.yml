@@ -1,0 +1,51 @@
+name: Convert Ruleset to MRS
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'rules.json'
+  schedule:
+    - cron: '0 20 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download and Install Mihomo
+        run: |
+          # 携带 GITHUB_TOKEN 避免 API 速率限制
+          MIHOMO_URL=$(curl -sL -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/MetaCubeX/mihomo/releases/latest | \
+            grep "browser_download_url.*linux-amd64-v.*\.gz\"" | head -n 1 | cut -d '"' -f 4)
+          echo "Downloading mihomo from: $MIHOMO_URL"
+          curl -sSL "$MIHOMO_URL" -o mihomo.gz
+          gzip -d mihomo.gz
+          chmod +x mihomo
+          sudo mv mihomo /usr/local/bin/mihomo
+          mihomo -v
+
+      - name: Run Conversion Script
+        run: |
+          python build.py
+
+      - name: Deploy to Release Branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: release
+          keep_files: false
+          commit_message: "Auto-update ruleset [skip ci]"
